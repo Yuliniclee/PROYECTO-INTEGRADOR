@@ -311,3 +311,53 @@ Pendientes que dependen del Integrante 2 (se integran al unir ambas partes):
 - El caso de IA aplicada demostró ser una herramienta útil de diagnóstico que
   detectó una configuración incompleta, pero cuya recomendación debió validarse
   técnicamente en la topología antes de darla por correcta.
+
+
+## 2.1 Plan de direccionamiento (segmentos del Integrante 2)
+
+Valor de D = 9.
+
+| Segmento | Red | Dispositivo | Interfaz | IP | Máscara | Rol / Uso |
+|---|---|---|---|---|---|---|
+| R-HQ1 ↔ R-HQ2 (backbone) | 10.9.1.0/30 | R-HQ2 | g0/0 | 10.9.1.2 | 255.255.255.252 | Enlace WAN Backbone OSPF |
+| R-EDGE ↔ R-HQ2 | 10.9.3.0/30 | R-HQ2 | g0/2/0 | 10.9.3.2 | 255.255.255.252 | Enlace WAN Fibra Óptica Borde |
+| R-HQ2 ↔ R-BRANCH2 | 10.9.23.0/30 | R-HQ2 | g0/1 | 10.9.23.1 | 255.255.255.252 | Enlace WAN Sucursal OSPF |
+| | | R-BRANCH2 | g0/0 | 10.9.23.2 | 255.255.255.252 | Enlace WAN Sucursal OSPF |
+| R-HQ2 ↔ R-DATACENTER (principal) | 10.9.30.0/30 | R-HQ2 | g0/2 | 10.9.30.1 | 255.255.255.252 | Enlace WAN Principal DC |
+| | | R-DATACENTER | g0/0 | 10.9.30.2 | 255.255.255.252 | Enlace WAN Principal DC |
+| R-HQ1 ↔ R-DATACENTER (redundante) | 10.9.40.0/30 | R-DATACENTER | g0/3/0 | 10.9.40.2 | 255.255.255.252 | Enlace WAN Redundante DC |
+| LAN-HQ2 | 192.168.119.0/24 | R-HQ2 | Vlan119 | 192.168.119.1 | 255.255.255.0 | Gateway Casa Matriz HQ2 |
+| | | PC-HQ2 | NIC | 192.168.119.10 | 255.255.255.0 | Estación Casa Matriz HQ2 |
+| LAN-BRANCH2 | 192.168.29.0/24 | R-BRANCH2 | Vlan29 | 192.168.29.1 | 255.255.255.0 | Gateway Sucursal OSPF |
+| | | PC-B2 | NIC | 192.168.29.10 | 255.255.255.0 | Estación Sucursal Branch 2 |
+| LAN-SERVIDORES | 172.16.9.0/24 | R-DATACENTER | Vlan16 | 172.16.9.1 | 255.255.255.0 | Gateway Red Servidores |
+| | | SERVER | NIC | 172.16.9.10 | 255.255.255.0 | Servidor de Servicios |
+| LAN-ADMIN | 172.20.9.0/24 | R-DATACENTER | Vlan20 | 172.20.9.1 | 255.255.255.0 | Gateway Red Administración |
+| | | PC-ADM | NIC | 172.20.9.10 | 255.255.255.0 | Estación de Administración |
+
+Nota de implementación: al igual que en la sucursal legacy y HQ1, los accesos LAN en R-HQ2 (Fa0/1/0), R-BRANCH2 (Fa0/3/0) y R-DATACENTER (Fa0/2/0 y Fa0/2/1) están conectados a módulos de switch HWIC-4ESW. Por esta razón, se configuraron interfaces SVI (Vlan119, Vlan29, Vlan16 y Vlan20) asociadas a puertos de acceso en cada switch para proveer los gateways locales correspondientes.
+
+---
+
+## 3.1 Fase I - Construcción, cableado y direccionamiento (Parte Integrante 2)
+
+Se completó la infraestructura física y lógica de los enrutadores asignados al Integrante 2 (R-HQ2, R-BRANCH2 y R-DATACENTER):
+
+1. **Resolución de Enlace WAN R-EDGE ↔ R-HQ2:** Al tener los puertos integrados RJ-45 de R-HQ2 ocupados con R-HQ1, R-BRANCH2 y R-DATACENTER, el enlace hacia R-EDGE se conectó a través de los módulos transceptores HWIC-1GE-SFP (`g0/3/0` en R-EDGE y `g0/2/0` en R-HQ2), empleando cable de fibra óptica monomodo para habilitar la subred `10.9.3.0/30`.
+2. **Implementación de SVIs para Segmentos LAN:** Se definieron las VLANs en la base de datos de los routers con módulos switch (`vlan database`) y se levantaron las interfaces virtuales SVI con sus respectivas direcciones IP (/24). Los switches correspondientes (SW-HQ2, SW-BRANCH2, SW-SERVIDORES y SW-ADMIN) fueron asignados a sus respectivas VLANs de acceso, evitando discrepancias de VLAN nativa.
+3. **Configuración de Terminales:** Se configuraron las direcciones IPv4 estáticas, máscaras de subred y gateways en PC-HQ2, PC-B2, SERVER y PC-ADM.
+4. **Verificación de Enlaces Directos:** Se comprobó conectividad local mediante pruebas ICMP (`ping`) hacia los enlaces vecinos directamente conectados y puertas de enlace.
+
+**Evidencias:**
+
+- Figura 7. Interfaces de R-HQ2 — `10_show_ip_int_brief_R-HQ2.png`
+
+![Interfaces de R-HQ2](caps/10_show_ip_int_brief_R-HQ2.png)
+
+- Figura 8. Interfaces de R-BRANCH2 — `11_show_ip_int_brief_R-BRANCH2.png`
+
+![Interfaces de R-BRANCH2](caps/11_show_ip_int_brief_R-BRANCH2.png)
+
+- Figura 9. Interfaces de R-DATACENTER — `12_show_ip_int_brief_R-DATACENTER.png`
+
+![Interfaces de R-DATACENTER](caps/12_show_ip_int_brief_R-DATACENTER.png)
