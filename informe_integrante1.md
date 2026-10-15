@@ -361,3 +361,57 @@ Se completó la infraestructura física y lógica de los enrutadores asignados a
 - Figura 9. Interfaces de R-DATACENTER — `12_show_ip_int_brief_R-DATACENTER.png`
 
 ![Interfaces de R-DATACENTER](caps/12_show_ip_int_brief_R-DATACENTER.png)
+
+
+## 6.1 Fase IV - OSPF en el Núcleo Corporativo y Data Center (Parte Integrante 2)
+
+Se configuró el protocolo de enrutamiento dinámico OSPFv2 (proceso 10, área única 0) en los routers pertenecientes al dominio principal asignados al Integrante 2 (R-HQ2, R-BRANCH2 y R-DATACENTER), garantizando la sincronización de estados de enlace y la convergencia de toda la infraestructura:
+
+1. **Definición de Identificadores de Enrutador (Router ID):** Se configuraron manualmente los Router IDs para garantizar estabilidad y evitar reelecciones arbitrarias:
+   - `R-HQ2`: 2.2.2.2 (Backbone / Núcleo)
+   - `R-BRANCH2`: 4.4.4.4 (Sucursal OSPF)
+   - `R-DATACENTER`: 5.5.5.5 (Servidores y Gestión)
+2. **Publicación de Subredes en Área 0:** Se declararon las redes WAN punto a punto (/30 con wildcard 0.0.0.3) y los segmentos de acceso LAN (/24 con wildcard 0.0.0.255) correspondientes a cada interfaz activa.
+3. **Establecimiento de Adyacencias:** Se validó que las relaciones de vecindad alcanzaran el estado de sincronización completa (`FULL`), conformando la topología mallada en el núcleo corporativo.
+4. **Inspección de la Tabla de Enrutamiento:** En R-HQ2 se comprobó la correcta recepción de las rutas internas del núcleo (`O`), la inyección de la ruta por defecto hacia la salida de Internet originada en R-EDGE (`O*E2 0.0.0.0/0`) y la propagación de la sucursal legacy mediante la redistribución mutua efectuada en R-HQ1 (`O E2 192.168.9.0/24`).
+
+**Evidencias:**
+
+- Figura 13. Adyacencias OSPF en R-HQ2 (vecinos FULL con R-HQ1, R-EDGE, R-BRANCH2 y R-DATACENTER) — `13_show_ip_ospf_neighbor_R-HQ2.png`
+
+![Adyacencias OSPF en R-HQ2](caps/13_show_ip_ospf_neighbor_R-HQ2.png)
+
+- Figura 14. Adyacencias OSPF en R-DATACENTER (vecinos FULL con R-HQ2 y R-HQ1) — `14_show_ip_ospf_neighbor_R-DATACENTER.png`
+
+![Adyacencias OSPF en R-DATACENTER](caps/14_show_ip_ospf_neighbor_R-DATACENTER.png)
+
+- Figura 15. Tabla de rutas de R-HQ2 (rutas OSPF internas, externas E2 y ruta por defecto) — `15_show_ip_route_R-HQ2.png`
+
+![Tabla de rutas de R-HQ2](caps/15_show_ip_route_R-HQ2.png)
+
+## 7. Fase VI - Redundancia, Costos OSPF y Simulación de Fallas (Parte Integrante 2)
+
+Para garantizar la alta disponibilidad y optimizar el flujo de tráfico en el núcleo corporativo, se aplicó ingeniería de costos OSPF y se evaluó la resiliencia de la red ante contingencias controladas:
+
+1. **Ajuste de Métricas OSPF:** En R-DATACENTER se asignó un costo preferente de 10 a la interfaz `GigabitEthernet0/0` (enlace hacia R-HQ2) y un costo penalizado de 50 a la interfaz `GigabitEthernet0/3/0` (enlace redundante hacia R-HQ1). De este modo, el cálculo SPF selecciona de manera predeterminada el tránsito hacia R-HQ2 al ofrecer una métrica acumulada menor hacia los destinos del núcleo.
+2. **Comprobación de Ruta Primaria:** Mediante el comando `tracert` ejecutado desde PC-ADM hacia la estación remota PC-HQ1 (192.168.109.10), se verificó el tránsito a través del camino preferente: R-DATACENTER → R-HQ2 → R-HQ1 → PC-HQ1.
+3. **Simulación de Falla y Conmutación Dinámica:** Se provocó la desconexión del camino primario mediante el apagado administrativo (`shutdown`) de la interfaz `GigabitEthernet0/2` en R-HQ2. Al detectarse la pérdida del enlace, el proceso OSPF recalculó la topología y conmutó el tráfico de forma automática hacia el enlace redundante `10.9.40.0/30`, alcanzando a PC-HQ1 directamente a través del next-hop de R-HQ1 (10.9.40.1).
+4. **Recuperación Automática:** Tras reactivar el enlace principal (`no shutdown`), la adyacencia OSPF se restableció en estado FULL y el árbol de rutas reincorporó la interfaz `GigabitEthernet0/0` como vía óptima sin requerir intervención administrativa.
+
+**Evidencias:**
+
+- Figura 16. Trazado de ruta desde PC-ADM hacia LAN-HQ1 antes de la falla — `16_tracert_PC-ADM_a_PC-HQ1_antes_falla.png`
+
+![Trazado de ruta antes de la falla](caps/16_tracert_PC-ADM_a_PC-HQ1_antes_falla.png)
+
+- Figura 17. Trazado de ruta desde PC-ADM hacia LAN-HQ1 tras la falla — `17_tracert_PC-ADM_a_PC-HQ1_tras_falla.png`
+
+![Trazado de ruta tras la falla](caps/17_tracert_PC-ADM_a_PC-HQ1_tras_falla.png)
+
+- Figura 18. Tabla de rutas de R-DATACENTER durante la falla — `18_show_ip_route_R-DATACENTER_tras_falla.png`
+
+![Tabla de rutas de R-DATACENTER durante la falla](caps/18_show_ip_route_R-DATACENTER_tras_falla.png)
+
+- Figura 19. Tabla de rutas de R-DATACENTER tras la recuperación — `19_show_ip_route_R-DATACENTER_recuperado.png`
+
+![Tabla de rutas de R-DATACENTER tras la recuperación](caps/19_show_ip_route_R-DATACENTER_recuperado.png)
