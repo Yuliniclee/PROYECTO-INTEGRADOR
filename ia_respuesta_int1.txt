@@ -1,0 +1,138 @@
+===============================================================================
+RESPUESTA DEL AI ROUTING ADVISOR - FASE VII (INTEGRANTE 1)
+Proyecto Integrador - Redes de Computadoras 2 - USAC
+Routers analizados: R-HQ1 y R-BRANCH1
+===============================================================================
+
+PROMPT ENTREGADO A LA IA:
+-------------------------
+Actua como ingeniero de redes senior (AI Routing Advisor). Te comparto salidas
+reales de Cisco IOS de dos routers de una red empresarial que combina RIPv2 y
+OSPF con redistribucion mutua en R-HQ1.
+1. Identifica todas las rutas RIP, OSPF y estaticas visibles.
+2. Determina que ruta esta instalada hacia la red de servidores (172.16.9.0/24)
+   y explica por que, mencionando distancia administrativa y metrica.
+3. Verifica si la redistribucion RIP <-> OSPF esta correctamente configurada en
+   R-HQ1 e indica si falta algun parametro.
+4. Confirma si "no auto-summary" esta activo en R-BRANCH1 y explica por que es
+   necesario con la red 10.0.0.0.
+5. Propone comandos adicionales de Cisco IOS para confirmar el diagnostico.
+
+
+===============================================================================
+RESPUESTA GENERADA:
+===============================================================================
+
+1. RUTAS IDENTIFICADAS
+----------------------
+En R-HQ1:
+
+  Rutas OSPF (codigo O, AD 110):
+  - O 10.9.3.0/30 [110/2]  -> enlace R-EDGE<->R-HQ2, con dos caminos de igual
+    costo (balanceo de carga por g0/0 y g0/1).
+  - O 10.9.23.0/30 [110/2] -> enlace R-HQ2<->R-BRANCH2.
+  - O 10.9.30.0/30 [110/11] -> enlace principal al Data Center.
+  - O*E2 0.0.0.0/0 [110/1]  -> ruta por defecto externa, originada en R-EDGE con
+    el comando default-information originate.
+
+  Rutas RIP (codigo R, AD 120):
+  - R 192.168.9.0/24 [120/1] -> LAN de la sucursal legacy, aprendida desde
+    R-BRANCH1.
+
+  Rutas estaticas (codigo S, AD 130):
+  - S 172.16.9.0/24 [130/0] via 10.9.40.2 -> ruta flotante hacia la red de
+    servidores.
+
+  Rutas conectadas (C/L): enlaces directos y LAN-HQ1 (Vlan10).
+
+En R-BRANCH1:
+  Todas las redes del nucleo llegan como codigo R via 10.9.12.1 (R-HQ1), mas la
+  LAN local 192.168.9.0/24 conectada en Vlan20 y la ruta por defecto R*.
+
+
+2. RUTA INSTALADA HACIA LA RED DE SERVIDORES (172.16.9.0/24)
+-----------------------------------------------------------
+En condiciones normales, la red de servidores se alcanza por OSPF, con distancia
+administrativa 110. La ruta estatica flotante configurada hacia esa red tiene
+AD 130, superior a la de OSPF, por lo que permanece inactiva mientras OSPF
+entregue el destino.
+
+El principio aplicado es que, entre dos rutas al mismo destino, se instala la de
+menor distancia administrativa: OSPF (110) gana sobre la flotante (130). La ruta
+flotante solo se instala en la tabla cuando el camino OSPF principal deja de
+estar disponible, actuando como respaldo.
+
+
+3. VERIFICACION DE LA REDISTRIBUCION RIP <-> OSPF EN R-HQ1
+---------------------------------------------------------
+La redistribucion esta configurada correctamente en AMBOS sentidos:
+
+  router rip
+   redistribute ospf 10 metric 3    -> OSPF hacia RIP (correcto)
+  router ospf 10
+   redistribute rip subnets          -> RIP hacia OSPF (correcto)
+
+R-HQ1 opera como ASBR (Autonomous System Boundary Router). Gracias a esto, las
+redes del nucleo OSPF se propagan hacia la sucursal legacy como rutas R, y la LAN
+de la sucursal (192.168.9.0/24) se propaga al dominio OSPF, verificable en
+R-DATACENTER donde aparece aprendida via "ospf 10" desde el router 1.1.1.1.
+
+No falta ningun parametro para la operacion: la red converge en ambos dominios.
+
+Observacion: en OSPF->RIP se fijo una metrica de semilla de 3 saltos (metric 3),
+necesaria porque RIP no entiende el costo de OSPF y requiere una metrica de
+saltos valida para las rutas redistribuidas.
+
+
+4. CONFIRMACION DE "no auto-summary" EN R-BRANCH1
+-------------------------------------------------
+Confirmado: "no auto-summary" esta activo (Automatic network summarization is not
+in effect).
+
+Es necesario porque R-BRANCH1 tiene interfaces en dos redes mayores distintas: la
+10.0.0.0/8 (enlace WAN 10.9.12.0/30) y la 192.168.9.0/24 (LAN). Sin
+"no auto-summary", RIPv2 resumiria automaticamente a los limites classful
+(10.0.0.0/8), ocultando la mascara real /30 de los enlaces WAN. Con la
+sumarizacion desactivada, RIPv2 envia la informacion VLSM completa y las subredes
+se anuncian con su mascara correcta, evitando rutas ambiguas o perdida de alcance
+entre subredes discontinuas.
+
+
+5. COMANDOS ADICIONALES DE DIAGNOSTICO RECOMENDADOS
+---------------------------------------------------
+- show ip ospf database     -> inspeccionar las LSA externas (Type-5) generadas
+  por la redistribucion; ahi debe aparecer la red 192.168.9.0 inyectada por
+  R-HQ1.
+- show ip route 172.16.9.0  -> confirmar que ruta esta instalada hacia servidores
+  y por que (verificar que OSPF gana a la flotante).
+- show ip protocols         -> confirmar "Redistributing: rip, ospf 10" en RIP y
+  "Redistributing External Routes from rip" en OSPF.
+- show ip route ospf        -> ver unicamente las rutas aprendidas por OSPF.
+- En R-HQ2: show ip route 192.168.9.0 -> comprobar que la LAN legacy se recibe
+  como ruta OSPF en el nucleo.
+
+
+===============================================================================
+CONCLUSION / VEREDICTO
+===============================================================================
+VISTO BUENO: La configuracion de R-HQ1 y R-BRANCH1 es CORRECTA y COMPLETA.
+
+- La redistribucion mutua RIP <-> OSPF opera en ambos sentidos; R-HQ1 funciona
+  correctamente como ASBR.
+- La LAN de la sucursal legacy (192.168.9.0/24) se propaga al dominio OSPF y es
+  alcanzable desde el nucleo (verificado en R-DATACENTER).
+- El comando "no auto-summary" esta correctamente aplicado en RIPv2.
+- La ruta estatica flotante esta bien disenada: permanece inactiva bajo operacion
+  normal (OSPF AD 110 < flotante AD 130) y se activa solo ante la falla del
+  enlace principal.
+- No se detectaron errores de configuracion pendientes en el dominio del
+  Integrante 1.
+
+Nota de validacion tecnica: durante la recopilacion inicial de salidas, la IA
+detecto que faltaba el comando "redistribute rip" dentro del proceso OSPF (la
+redistribucion estaba incompleta en sentido RIP->OSPF). Se aplico la correccion
+y se verifico que la red 192.168.9.0/24 aparece como ruta OSPF en el nucleo. Esto
+confirma el valor de la IA como apoyo de diagnostico y, a la vez, la necesidad de
+validar tecnicamente sus recomendaciones en la topologia real: la IA apoya al
+administrador, no lo reemplaza.
+===============================================================================
