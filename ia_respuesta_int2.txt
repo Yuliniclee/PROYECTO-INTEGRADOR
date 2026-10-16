@@ -1,0 +1,55 @@
+================================================================================
+RESPUESTA DEL ASISTENTE DE IA (AI ROUTING ADVISOR) - PARTE INTEGRANTE 2
+================================================================================
+
+1. Identificación de Adyacencias OSPF y Área de Operación:
+   - R-HQ2 mantiene adyacencias en estado FULL dentro del Área 0 con:
+     * 1.1.1.1 (R-HQ1) a través de GigabitEthernet0/0 (10.9.1.1).
+     * 3.3.3.3 (R-EDGE) a través de GigabitEthernet0/2/0 (10.9.3.1).
+     * 4.4.4.4 (R-BRANCH2) a través de GigabitEthernet0/1 (10.9.23.2).
+     * 5.5.5.5 (R-DATACENTER) a través de GigabitEthernet0/2 (10.9.30.2).
+   - R-DATACENTER mantiene adyacencias en estado FULL dentro del Área 0 con:
+     * 2.2.2.2 (R-HQ2) a través de GigabitEthernet0/0 (10.9.30.1).
+     * 1.1.1.1 (R-HQ1) a través de GigabitEthernet0/3/0 (10.9.40.1).
+   Todas las interfaces operan bajo el proceso OSPF 10 en el Área troncal (Área 0).
+
+2. Ruta Instalada hacia 192.168.109.0/24 y Explicación de Costos:
+   - En estado normal, la ruta hacia la LAN de HQ1 (192.168.109.0/24) se instala 
+     en R-DATACENTER a través de 10.9.30.1 (R-HQ2) con una métrica total de 12 [110/12].
+   - Desglose del costo acumulado:
+     * Enlace R-DATACENTER -> R-HQ2 (Gi0/0): ip ospf cost = 10.
+     * Enlace R-HQ2 -> R-HQ1 (Gi0/0): ip ospf cost = 1 (por defecto en GigabitEthernet).
+     * Segmento LAN-HQ1 en R-HQ1: costo = 1.
+     * Costo total acumulado = 10 + 1 + 1 = 12.
+   - El camino alternativo vía R-HQ1 directo tiene un costo de interfaz de 50 en 
+     GigabitEthernet0/3/0, lo que da un costo acumulado de 50 + 1 = 51. Al ser 12 < 51,
+     el algoritmo Dijkstra (SPF) instala de forma determinista el camino por R-HQ2.
+
+3. Diagnóstico de Conectividad durante la Falla del Enlace Principal:
+   - Al caer GigabitEthernet0/2 en R-HQ2 (o Gi0/0 en R-DATACENTER), la adyacencia
+     con el vecino 2.2.2.2 pasa a estado DOWN.
+   - La red mantiene conectividad continua hacia el Data Center gracias al enlace
+     redundante 10.9.40.0/30 (GigabitEthernet0/3/0).
+   - En la tabla de rutas de R-DATACENTER, la ruta hacia 192.168.109.0/24 se actualiza
+     hacia el next-hop 10.9.40.1 con métrica [110/51]. Las trazas ICMP confirman
+     el flujo directo sin bucles de enrutamiento ni pérdida permanente de paquetes.
+
+4. Relación entre `ip ospf cost` y la Selección de Ruta:
+   - OSPF utiliza el costo acumulado como única métrica para la selección del mejor
+     camino (Shortest Path First).
+   - Por defecto, Cisco IOS calcula el costo como: Costo = Ancho de banda de referencia / 
+     Ancho de banda de la interfaz (10^8 / BW). En enlaces Gigabit y superiores, el
+     costo por defecto es 1.
+   - El comando `ip ospf cost <valor>` anula el cálculo automático, permitiendo al
+     administrador manipular manualmente la ingeniería de tráfico. Los caminos con
+     menor costo acumulado se instalan en la RIB; los caminos con mayor costo quedan
+     en la LSDB como rutas de respaldo automáticas ante fallas.
+
+5. Comandos Recomendados para Confirmar la Convergencia tras la Falla:
+   1. `show ip ospf neighbor`: Para confirmar la pérdida de la adyacencia primaria y
+      la persistencia de la adyacencia secundaria (1.1.1.1 en estado FULL).
+   2. `show ip route ospf`: Para verificar que el next-hop de todas las redes del núcleo
+      haya migrado a la dirección 10.9.40.1 con la nueva métrica de 51.
+   3. `traceroute 192.168.109.10`: Para verificar en el plano de datos que los paquetes
+      reales siguen el camino físico esperado a través del enlace redundante.
+================================================================================
